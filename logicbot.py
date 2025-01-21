@@ -1,5 +1,4 @@
 import telebot
-from telebot import types
 import random
 import requests
 from bs4 import BeautifulSoup
@@ -7,11 +6,17 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import sqlite3
 import time
 import tmdbsimple as tmdb
-#ВОПРОС!!! глобал переменные в боте это плохо? при одновременном запросе к боту с логином может записать 2 в 1 или переменные типа глобал локальны и при одновременном запросе все будет ок?
-#ВОПРОС!!! почему ограничение символов через Varchar не работает?
-bot = telebot.TeleBot("8027072430:AAG-uhnAuXyr1VpRFSkGSpM49AEBq2Kilrs")
-tmdb.API_KEY = '03684a8a7594f223cb6c8416d6afbc25'
-num_data_zal = None
+import func
+import os
+from dotenv import load_dotenv
+
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path)
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+API_TMDB = os.getenv('API_TMDB')
+bot = telebot.TeleBot(f'{BOT_TOKEN}')
+tmdb.API_KEY = f'{API_TMDB}'
 login = None
 password = None
 name_position = {}
@@ -38,31 +43,100 @@ AllGenre = {
     'Вестерн': 37
 }
 
-user_data = {}
 
 @bot.message_handler(content_types=['photo'])
 def get_photo(message):
-    bot.reply_to(message, f'{random.randint(0,10)}/10')
+    bot.reply_to(message, f'{random.randint(0, 10)}/10')
+
 
 @bot.message_handler(commands=['website'])
 def site(message):
     bot.send_message(message.chat.id, 'https://2016.kinofest.org/program-2022')
 
-@bot.message_handler(commands=['start', 'pickme'])
+
+@bot.message_handler(commands=['start'])
 def main_s(message):
-    #name_position[message.chat.id] = "MAIN"
-    inline_button = types.InlineKeyboardMarkup()
-    btn1 = types.InlineKeyboardButton('Посмотреть расписание', callback_data='look_rasp')
-    btn2 = types.InlineKeyboardButton('Личный календарь', callback_data='look_lk')
-    btn3 = types.InlineKeyboardButton('Регистрация', callback_data='regi')
-    btn4 = types.InlineKeyboardButton('Новости', callback_data='news')
-    btn5 = types.InlineKeyboardButton('Найти фильм', callback_data='find_film')
+    try:
+        msg = message.message
+    except:
+        msg = message
+    # name_position[message.chat.id] = "MAIN"
+    inline_button = InlineKeyboardMarkup()
+    btn1 = InlineKeyboardButton('Посмотреть расписание', callback_data='look_rasp')
+    btn2 = InlineKeyboardButton('Личный календарь', callback_data='look_lk')
+    btn3 = InlineKeyboardButton('Регистрация', callback_data='regi')
+    btn4 = InlineKeyboardButton('Новости', callback_data='news')
+    btn5 = InlineKeyboardButton('Найти фильм', callback_data='find_film')
     inline_button.row(btn1, btn2)
     inline_button.row(btn3)
     inline_button.row(btn4)
     inline_button.row(btn5)
-    bot.send_message(message.chat.id, f"Приветствую {message.from_user.first_name}! 🎬 Добро пожаловать в мир кино! Я ваш гид по миру кинематографа, готовый помочь выбрать фильм на любой вкус. Могу предложить новинки проката, лучшие фильмы разных жанров, рассказать о последних премьерах и даже поделиться интересными фактами о мире кино. Что бы вы хотели узнать?", reply_markup=inline_button)
-    #bot.register_next_step_handler(message, menu)
+    bot.send_message(msg.chat.id,
+                     f"Приветствую, {message.from_user.first_name}! 🎬 Добро пожаловать в мир кино! Я ваш гид по миру кинематографа, готовый помочь выбрать фильм на любой вкус. Могу предложить новинки проката, лучшие фильмы разных жанров, рассказать о последних премьерах и даже поделиться интересными фактами о мире кино. Что бы вы хотели узнать?",
+                     reply_markup=inline_button)
+    # bot.register_next_step_handler(message, menu)
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('zal_'))
+def look_zal(callback):
+    zal = int(callback.data.split('_')[1])
+
+    inline_btn_rasp_text = InlineKeyboardMarkup()
+    nazad_btn = InlineKeyboardButton('Меню🏠︎', callback_data='nazad')
+    inline_btn_rasp_text.row(nazad_btn)
+    print(data_zal.result_data[zal])
+    bot.edit_message_text(
+        chat_id=callback.message.chat.id,
+        message_id=callback.message.message_id,
+        text=data_zal.result_data[zal],
+        reply_markup=inline_btn_rasp_text
+    )
+
+class DataZal:
+    result_data = None
+    @bot.callback_query_handler(func=lambda callback: callback.data.startswith('data_'))
+    def osnova(callback):
+        sp_infi = [[], [], [], []]
+        check_site_programs = requests.get('https://2016.kinofest.org/program-2022')
+        n_data = int(callback.data.split('_')[1])
+        inline_btn_data = InlineKeyboardMarkup()
+        btnz1 = InlineKeyboardButton('Зал 1', callback_data='zal_1')
+        btnz2 = InlineKeyboardButton('Зал 2', callback_data='zal_2')
+        btnz3 = InlineKeyboardButton('Зал 3', callback_data='zal_3')
+        nazad_btn = InlineKeyboardButton('Меню🏠︎', callback_data='nazad')
+        inline_btn_data.row(btnz1, btnz2, btnz3)
+        inline_btn_data.row(nazad_btn)
+        bot.edit_message_text(
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            text="Выберите зал",
+            reply_markup=inline_btn_data
+        )
+        if check_site_programs.status_code == 200:
+            html_site = check_site_programs.text
+            soup = BeautifulSoup(html_site, 'lxml')
+            find_zal = soup.find_all('td', class_="prog-table-33")
+            for item in find_zal:
+                print(item.text.replace('\n\n', '').split('/'))
+            final_zal = [find_zal[item].text.replace('\n\n', '').split('/') for item in range(len(find_zal))]
+            sp_infi = list(zip(*[iter(final_zal)] * 3))
+            '''s = 0
+            sc_dz = 0
+            for i in range(len(find_zal)):
+                sp_infi[s].append(find_zal[i].text.replace('\n\n', '').split('/'))
+                sc_dz += 1
+                if sc_dz == 3:
+                    sc_dz = 0
+                    s += 1'''
+        DataZal.result_data = sp_infi[n_data]
+data_zal = DataZal()
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('nazvpage_'))
+def show_nazv_film(callback):
+    page = int(callback.data.split('_')[2])
+    mess = callback.data.split('_')[1]
+    func.nazv_f(callback, mess, page)
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('genre_'))
 def show_genre_film(call):
     genre_id = int(call.data.split('_')[1])
@@ -71,26 +145,28 @@ def show_genre_film(call):
     discover = tmdb.Discover()
     response = discover.movie(with_genres=genre_id, language="ru", page=page)
 
-    markup_res_genre = types.InlineKeyboardMarkup()
+    markup_res_genre = InlineKeyboardMarkup()
     for result in response['results']:
         nazv = result['title']
         movie_id = result['id']
         callback_data = f'movie_{movie_id}'
-        btn = types.InlineKeyboardButton(text=nazv, callback_data=callback_data)
+        btn = InlineKeyboardButton(text=nazv, callback_data=callback_data)
         markup_res_genre.row(btn)
 
     sp_btn = []
     next_page_callback = f'genre_{genre_id}_page_{page + 1}'
-    load_btn = types.InlineKeyboardButton('->', callback_data=next_page_callback)
+    load_btn = InlineKeyboardButton('->', callback_data=next_page_callback)
     sp_btn.append(load_btn)
 
     if page > 1:
         prev_page_callback = f'genre_{genre_id}_page_{page - 1}'
-        prev_btn = types.InlineKeyboardButton('<-', callback_data=prev_page_callback)
+        prev_btn = InlineKeyboardButton('<-', callback_data=prev_page_callback)
         sp_btn.insert(0, prev_btn)
 
     reserv_AllGenre = {value: key for key, value in AllGenre.items()}
+    menu_btn = InlineKeyboardButton('Меню🏠︎', callback_data='nazad')
     markup_res_genre.row(*sp_btn)
+    markup_res_genre.row(menu_btn)
     bot.edit_message_text(
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
@@ -99,111 +175,132 @@ def show_genre_film(call):
     )
 
 
+class User:
+    user_data = {}
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('movie_'))
-def show_film(call):
-    def escape_markdown_v2(text): #Экранирует специальные символы для поддержки MarkdownV2
-        special_characters = r'_*[]()~`>#+-=|{}.!'
-        return ''.join(f'\\{char}' if char in special_characters else char for char in text)
+    @bot.callback_query_handler(func=lambda call: call.data.startswith('movie_'))
+    def show_film(call):
+        def escape_markdown_v2(text):
+            special_characters = r'_*[]()~`>#+-=|{}.!'
+            return ''.join(f'\\{char}' if char in special_characters else char for char in text)
 
-    movie_id = int(call.data.split('_')[1])
-    movie = tmdb.Movies(movie_id).info(language="ru")
-    poster_path = movie.get('poster_path')
-    if poster_path:
-        poster_url = f"https://image.tmdb.org/t/p/w500/{poster_path}"
-    else:
-        poster_url = None
+        movie_id = int(call.data.split('_')[1])
+        movie = tmdb.Movies(movie_id).info(language="ru")
+        poster_path = movie.get('poster_path')
+        if poster_path:
+            poster_url = f"https://image.tmdb.org/t/p/w500/{poster_path}"
+        else:
+            poster_url = None
 
-    genres = ', '.join([genre['name'] for genre in movie['genres']]) or 'Нет жанра'
-    overview = movie.get('overview') or 'Описание отсутствует.'
-    release_date = movie.get('release_date') or 'Дата выхода неизвестна.'
+        genres = ', '.join([genre['name'] for genre in movie['genres']]) or 'Нет жанра'
+        overview = movie.get('overview') or 'Описание отсутствует.'
+        release_date = movie.get('release_date') or 'Дата выхода неизвестна.'
 
-    text_f = f"""*Название:* {escape_markdown_v2(movie['title'])}
-*Жанры:* {escape_markdown_v2(genres)}
-*Дата выхода:* {escape_markdown_v2(release_date)}
-*Рейтинг:* {escape_markdown_v2(str(movie['vote_average']))} / 10
-*Описание:*
-    {escape_markdown_v2(overview)}"""
+        text_f = f"""*Название:* {escape_markdown_v2(movie['title'])}
+    *Жанры:* {escape_markdown_v2(genres)}
+    *Дата выхода:* {escape_markdown_v2(release_date)}
+    *Рейтинг:* {escape_markdown_v2(str(movie['vote_average']))} / 10
+    *Описание:*
+        {escape_markdown_v2(overview)}"""
 
-    markup_izbr = InlineKeyboardMarkup()
-    markup_izbr_del = InlineKeyboardMarkup()
-    markup_izbr.add(InlineKeyboardButton('Добавить в избранное', callback_data='add_izbr'))
-    markup_izbr_del.add(InlineKeyboardButton('Удалить из избранного', callback_data='del_izbr'))
+        markup_izbr = InlineKeyboardMarkup()
+        markup_izbr_del = InlineKeyboardMarkup()
+        markup_izbr.add(InlineKeyboardButton('Добавить в избранное', callback_data='add_izbr'))
+        markup_izbr_del.add(InlineKeyboardButton('Удалить из избранного', callback_data='del_izbr'))
+        User.user_data[call.message.chat.id] = {
+            'text_f': text_f,
+            'markup_izbr': markup_izbr,
+            'markup_izbr_del': markup_izbr_del,
+            'movie_info': movie
+        }
 
-    user_data[call.message.chat.id] = {
-        'text_f': text_f,
-        'markup_izbr': markup_izbr,
-        'markup_izbr_del': markup_izbr_del
-    }
+        menu_btn = InlineKeyboardButton('Меню🏠︎', callback_data='nazad')
+        markup_izbr.row(menu_btn)
+        markup_izbr_del.row(menu_btn)
 
-    if poster_url:
-        bot.send_photo(call.message.chat.id, photo=poster_url, caption=text_f, parse_mode='MarkdownV2', reply_markup=markup_izbr)
-    else:
-        bot.send_message(call.message.chat.id, text=text_f, parse_mode='MarkdownV2', reply_markup=markup_izbr)
+        if poster_url:
+            bot.send_photo(call.message.chat.id, photo=poster_url, caption=text_f, parse_mode='MarkdownV2',
+                           reply_markup=markup_izbr)
+        else:
+            bot.send_message(call.message.chat.id, text=text_f, parse_mode='MarkdownV2', reply_markup=markup_izbr)
 
+
+dataizb = User()
 
 
 @bot.callback_query_handler(func=lambda callback: True)
 def callback_message(callback):
-    if callback.message.chat.id in user_data:
-        film_data = user_data[callback.message.chat.id]
+    if callback.message.chat.id in dataizb.user_data:
+        film_data = dataizb.user_data[callback.message.chat.id]
         if callback.data == 'add_izbr':
-            bot.edit_message_text(
+
+            conn = sqlite3.connect('bazaizbr.bz')
+            cursor = conn.cursor()
+
+            cursor.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER, nazv_izbr_f, data_izbr_film)''')
+            cursor.execute('''INSERT INTO users (id, nazv_izbr_f, data_izbr_film) VALUES (?, ?, ?)''',(callback.message.from_user.id, film_data['movie_info']['title'], film_data['text_f']))
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+            bot.edit_message_caption(
                 chat_id=callback.message.chat.id,
                 message_id=callback.message.message_id,
-                text=film_data['text_f'],
-                reply_markup=film_data['markup_izbr_del']
+                caption=film_data['text_f'],
+                reply_markup=film_data['markup_izbr_del'],
+                parse_mode='MarkdownV2'
             )
         elif callback.data == 'del_izbr':
-            bot.edit_message_text(
+            conn = sqlite3.connect('bazaizbr.bz')
+            cursor = conn.cursor()
+
+            cursor.execute('''DELETE FROM users WHERE nazv_izbr_f = ?''', (film_data['text_f'],))
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+            bot.edit_message_caption(
                 chat_id=callback.message.chat.id,
                 message_id=callback.message.message_id,
-                text=film_data['text_f'],
-                reply_markup=film_data['markup_izbr']
+                caption=film_data['text_f'],
+                reply_markup=film_data['markup_izbr'],
+                parse_mode='MarkdownV2'
             )
-    #else:
-     #   bot.send_message(callback.message.chat.id, "Ошибка: данные фильма не найдены.")
+    # else:
+    #   bot.send_message(callback.message.chat.id, "Ошибка: данные фильма не найдены.")
 
     if callback.data == 'genre':
         markup_genre = InlineKeyboardMarkup(row_width=1)
         for genres in AllGenre:
             markup_genre.add(InlineKeyboardButton(genres, callback_data=f'genre_{AllGenre[genres]}_page_1'))
+
+        menu_btn = InlineKeyboardButton('Меню🏠︎', callback_data='nazad')
+        markup_genre.row(menu_btn)
+
         bot.send_message(callback.message.chat.id, 'Список жанров', reply_markup=markup_genre)
 
     if callback.data == 'nazv':
-        def nazv_f(message):
-            search = tmdb.Search()
-            response = search.movie(query=message.text, language="ru")
-
-            if not response['results']:
-                bot.send_message(callback.message.chat.id, 'По вашему запросу ничего не найдено')
-                bot.send_message(callback.message.chat.id, 'Попробуйте ещё раз')
-                bot.register_next_step_handler(callback.message, nazv_f)
-            else:
-                markup_nazv = InlineKeyboardMarkup(row_width=1)
-                for result in response['results']:
-                    nazv = result['title']
-                    film_id = result['id']
-                    callback_data = f'movie_{film_id}'
-                    button = types.InlineKeyboardButton(text=nazv, callback_data=callback_data)
-                    markup_nazv.add(button)
-                bot.send_message(message.chat.id, "Вот несколько подходящих вариантов:", reply_markup=markup_nazv)
-
         bot.edit_message_text(
             chat_id=callback.message.chat.id,
             message_id=callback.message.message_id,
             text="Напишите название фильма",
             reply_markup=None
         )
-        bot.register_next_step_handler(callback.message, nazv_f)
+        bot.register_next_step_handler(callback.message, lambda msg: func.nazv_f(callback, msg.text))
 
     if callback.data == 'find_film':
         markup_genre_nazv = InlineKeyboardMarkup()
+        nazad_btn = InlineKeyboardButton('Меню🏠︎', callback_data='nazad')
         nazv_btn = InlineKeyboardButton('Названию', callback_data='nazv')
         genre_btn = InlineKeyboardButton('Жанру', callback_data='genre')
-        markup_genre_nazv.row(nazv_btn,genre_btn)
-        bot.send_message(callback.message.chat.id, 'Поиск по', reply_markup=markup_genre_nazv)
-
+        markup_genre_nazv.row(nazv_btn, genre_btn)
+        markup_genre_nazv.row(nazad_btn)
+        bot.edit_message_text(
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            text='Поиск по',
+            reply_markup=markup_genre_nazv
+        )
 
     if callback.data == 'news':
         bot.edit_message_text(
@@ -247,11 +344,7 @@ def callback_message(callback):
         conn = sqlite3.connect('bazareg.bz')
         cursor = conn.cursor()
 
-        cursor.execute('''CREATE TABLE IF NOT EXISTS users (
-                                           id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                           login VARCHAR(25) UNIQUE,
-                                           pass VARCHAR(50)
-                                       )''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT,login VARCHAR(1) UNIQUE,pass VARCHAR(10))''')
         conn.commit()
         cursor.close()
         conn.close()
@@ -266,9 +359,9 @@ def callback_message(callback):
             if len(message.text) > 30:
                 bot.send_message(callback.message.chat.id, 'Эй, эй, куда столько много? 30 символов хватит')
                 time.sleep(1.4)
-                bot.send_message(callback.message.chat.id,'Давай сначала')
+                bot.send_message(callback.message.chat.id, 'Давай сначала')
                 time.sleep(0.7)
-                bot.send_message(callback.message.chat.id,'Придумайте Пароль')
+                bot.send_message(callback.message.chat.id, 'Придумайте Пароль')
                 bot.register_next_step_handler(message, user_password)
             else:
                 password = message.text.strip()
@@ -282,13 +375,16 @@ def callback_message(callback):
                 cursor.close()
                 conn.close()
 
-                markup = telebot.types.InlineKeyboardMarkup()
-                btn_dev = types.InlineKeyboardButton('Пользователи(админ)', callback_data='users_sps')
-                markup.add(btn_dev)
-                #btn_continue = types.InlineKeyboardButton('Подтвердить', callback_data='continue')
-                #markup.row(btn_continue)
+                markup = telebot.InlineKeyboardMarkup()
+                nazad_btn = InlineKeyboardButton('Меню🏠︎', callback_data='nazad')
+                btn_dev = InlineKeyboardButton('Пользователи(админ)', callback_data='users_sps')
+                markup.row(btn_dev)
+                markup.row(nazad_btn)
+                # btn_continue = InlineKeyboardButton('Подтвердить', callback_data='continue')
+                # markup.row(btn_continue)
 
-                bot.send_message(message.chat.id, f'Круто!\nТеперь ваш логин такой: {login}\nА пароль такой: {password}', reply_markup=markup)
+                bot.send_message(message.chat.id, f'Круто!\nВаш логин такой: {login}\nА пароль такой: {password}',
+                                 reply_markup=markup)
 
     '''if callback.data == 'continue':
         conn = sqlite3.connect('bazareg.bz')
@@ -319,30 +415,37 @@ def callback_message(callback):
         bot.send_message(callback.message.chat.id, f'Все пользователи:\n\n{info_au}')
 
 
-    check_site = requests.get('https://2016.kinofest.org/program-2022')
-
-    def lookraspf():
-        if check_site.status_code == 200:
-            html = check_site.text
+    check_site_news = requests.get('https://2016.kinofest.org/news')
+    def look_news():
+        if check_site_news.status_code == 200:
+            html = check_site_news.text
             soup = BeautifulSoup(html, 'lxml')
-            element = soup.find_all('p', attrs={'style': 'color: #800080; font-size: 20px; font-family: verdana, geneva; text-align: center;'})
-        else:
-            bot.send_message(callback.message.chat.id, f'Ошибка при запросе: {check_site.status_code}')
+            elm_news = soup.find(class_='moduletable_news')
 
-        inline_btn_rasp = types.InlineKeyboardMarkup()
-        btnr4 = types.InlineKeyboardButton(f'1.  {element[e+3].text}', callback_data='data4')
+    def look_raspf():
+        check_site_programs = requests.get('https://2016.kinofest.org/program-2022')
+        if check_site_programs.status_code == 200:
+            html = check_site_programs.text
+            soup = BeautifulSoup(html, 'lxml')
+            element = soup.find_all('p', attrs={
+                'style': 'color: #800080; font-size: 20px; font-family: verdana, geneva; text-align: center;'})
+        else:
+            bot.send_message(callback.message.chat.id, f'Ошибка при запросе: {check_site_programs.status_code}')
+
+        inline_btn_rasp = InlineKeyboardMarkup()
+        btnr4 = InlineKeyboardButton(f'1.  {element[e + 3].text}', callback_data='data_3')
         inline_btn_rasp.row(btnr4)
-        btnr3 = types.InlineKeyboardButton(f'2.  {element[e+2].text}', callback_data='data3')
+        btnr3 = InlineKeyboardButton(f'2.  {element[e + 2].text}', callback_data='data_2')
         inline_btn_rasp.row(btnr3)
-        btnr2 = types.InlineKeyboardButton(f'3.  {element[e+1].text}', callback_data='data2')
+        btnr2 = InlineKeyboardButton(f'3.  {element[e + 1].text}', callback_data='data_1')
         inline_btn_rasp.row(btnr2)
-        btnr1 = types.InlineKeyboardButton(f'4.  {element[e].text}', callback_data='data1')
+        btnr1 = InlineKeyboardButton(f'4.  {element[e].text}', callback_data='data_0')
         inline_btn_rasp.row(btnr1)
 
-        sled_btn = types.InlineKeyboardButton('След.', callback_data='sled_sps')
-        pred_btn = types.InlineKeyboardButton('Пред.', callback_data='pred_sps')
+        sled_btn = InlineKeyboardButton('След.', callback_data='sled_sps')
+        pred_btn = InlineKeyboardButton('Пред.', callback_data='pred_sps')
         inline_btn_rasp.row(pred_btn, sled_btn)
-        nazad_btn = types.InlineKeyboardButton('Назад', callback_data='nazad')
+        nazad_btn = InlineKeyboardButton('Меню🏠︎', callback_data='nazad')
         inline_btn_rasp.row(nazad_btn)
         bot.edit_message_text(
             chat_id=callback.message.chat.id,
@@ -353,151 +456,82 @@ def callback_message(callback):
 
     if callback.data == 'look_rasp':
         e = 0
-        lookraspf()
+        look_raspf()
 
     '''if callback.data == 'sled':
         e += 3
         callback_data='look_rasp'
         callback_message(callback)'''
 
-
-    def osnova():
-        inline_btn_data = types.InlineKeyboardMarkup()
-        btnz1 = types.InlineKeyboardButton('Зал 1', callback_data='zal1')
-        btnz2 = types.InlineKeyboardButton('Зал 2', callback_data='zal2')
-        btnz3 = types.InlineKeyboardButton('Зал 3', callback_data='zal3')
-        nazad_btn = types.InlineKeyboardButton('Назад', callback_data='nazad')
-        inline_btn_data.row(btnz1, btnz2, btnz3)
-        inline_btn_data.row(nazad_btn)
-        bot.edit_message_text(
-            chat_id=callback.message.chat.id,
-            message_id=callback.message.message_id,
-            text="Выберите зал",
-            reply_markup=inline_btn_data
-        )
-
-    if check_site.status_code == 200:
-        html_site = check_site.text
-        soup = BeautifulSoup(html_site, 'lxml')
-        find_zal = soup.find_all('td', class_="prog-table-33")
-        sp_infi = [[], [], [], []]
-        s = 0
-        sc_dz = 0
-        for datazal in range(len(find_zal)):
-            sp_infi[s].append(find_zal[datazal].text)
-            sc_dz += 1
-            if sc_dz == 3:
-                sc_dz = 0
-                s += 1
-
-    global num_data_zal
-
-    if callback.data == 'data1':
-        #name_position[callback.message.chat.id] = "DATA1"
-        osnova()
-        num_data_zal = 0
-
-    if callback.data == 'data2':
-        #name_position[callback.message.chat.id] = "DATA2"
-        osnova()
-        num_data_zal = 1
-
-    if callback.data == 'data3':
-        #name_position[callback.message.chat.id] = "DATA3"
-        osnova()
-        num_data_zal = 2
-
-    if callback.data == 'data4':
-        #name_position[callback.message.chat.id] = "DATA4"
-        osnova()
-        num_data_zal = 3
-
-    if callback.data == 'zal1':
-        inline_btn_rasp_text = InlineKeyboardMarkup()
-        nazad_btn = types.InlineKeyboardButton('Назад', callback_data='nazad')
-        inline_btn_rasp_text.row(nazad_btn)
-        bot.edit_message_text(
-            chat_id=callback.message.chat.id,
-            message_id=callback.message.message_id,
-            text=sp_infi[num_data_zal][0],
-            reply_markup=inline_btn_rasp_text
-        )
-
-    if callback.data == 'zal2':
-        inline_btn_rasp_text = InlineKeyboardMarkup()
-        nazad_btn = types.InlineKeyboardButton('Назад', callback_data='nazad')
-        inline_btn_rasp_text.row(nazad_btn)
-        bot.edit_message_text(
-            chat_id=callback.message.chat.id,
-            message_id=callback.message.message_id,
-            text=sp_infi[num_data_zal][1],
-            reply_markup=inline_btn_rasp_text
-        )
-
-    if callback.data == 'zal3':
-        inline_btn_rasp_text = InlineKeyboardMarkup()
-        nazad_btn = types.InlineKeyboardButton('Назад', callback_data='nazad')
-        inline_btn_rasp_text.row(nazad_btn)
-        bot.edit_message_text(
-            chat_id=callback.message.chat.id,
-            message_id=callback.message.message_id,
-            text=sp_infi[num_data_zal][2],
-            reply_markup=inline_btn_rasp_text
-        )
-
     if callback.data == 'look_lk':
-        #name_position[callback.message.chat.id] = "LK"
-        inline_btn_l_k = types.InlineKeyboardMarkup()
-        nazad_btn = types.InlineKeyboardButton('Назад', callback_data='nazad')
-        btn_izbr = types.InlineKeyboardButton('Избранное', callback_data='like_films_mp')
+        # name_position[callback.message.chat.id] = "LK"
+        inline_btn_l_k = InlineKeyboardMarkup()
+        nazad_btn = InlineKeyboardButton('Меню🏠︎', callback_data='nazad')
+        btn_izbr = InlineKeyboardButton('Избранное', callback_data='like_films_mp')
         inline_btn_l_k.row(btn_izbr)
-        btn_rec = types.InlineKeyboardButton('Рекомендации', callback_data='rec')
+        btn_rec = InlineKeyboardButton('Рекомендации', callback_data='rec')
         inline_btn_l_k.row(btn_rec)
-        btn_sms = types.InlineKeyboardButton('Уведомления', callback_data='sms')
+        btn_sms = InlineKeyboardButton('Уведомления', callback_data='sms')
         inline_btn_l_k.row(btn_sms)
         inline_btn_l_k.row(nazad_btn)
         bot.edit_message_text(
             chat_id=callback.message.chat.id,
             message_id=callback.message.message_id,
-            text='тут будет текст после нажатия ЛК',
+            text='Настройки уведомлений,\nпросмотр избранного,\nрекомендации — всё это находится здесь.',
             reply_markup=inline_btn_l_k
         )
     if callback.data == 'like_films_mp':
-        #name_position[callback.message.chat.id] = "lIKE"
-        inline_btn_like = types.InlineKeyboardMarkup()
-        nazad_btn = types.InlineKeyboardButton('Назад', callback_data='nazad')
-        btn_mplike = types.InlineKeyboardButton('Мероприятия', callback_data='mp_rec')
-        btn_filmslike = types.InlineKeyboardButton('Фильмы', callback_data='films_rec')
+        # name_position[callback.message.chat.id] = "lIKE"
+        inline_btn_like = InlineKeyboardMarkup()
+        nazad_btn = InlineKeyboardButton('Меню🏠︎', callback_data='nazad')
+        btn_mplike = InlineKeyboardButton('Мероприятия', callback_data='mp_like')
+        btn_filmslike = InlineKeyboardButton('Фильмы', callback_data='films_like')
         inline_btn_like.row(btn_mplike, btn_filmslike)
         inline_btn_like.row(nazad_btn)
         bot.edit_message_text(
             chat_id=callback.message.chat.id,
             message_id=callback.message.message_id,
-            text='после нажатия Л_МиФ тут будет либо текст с кнопками, либо только кнопки',
+            text='Любимые фильмы и события',
             reply_markup=inline_btn_like
         )
     if callback.data == 'rec':
-        #name_position[callback.message.chat.id] = "REC"
-        inline_btn_rec = types.InlineKeyboardMarkup()
-        nazad_btn = types.InlineKeyboardButton('Назад', callback_data='nazad')
-        btn_mprec = types.InlineKeyboardButton('Мероприятия', callback_data='mp_rec')
-        btn_filmsrec = types.InlineKeyboardButton('Фильмы', callback_data='films_rec')
-        inline_btn_rec.row(btn_mprec,btn_filmsrec)
+        # name_position[callback.message.chat.id] = "REC"
+        inline_btn_rec = InlineKeyboardMarkup()
+        nazad_btn = InlineKeyboardButton('Меню🏠︎', callback_data='nazad')
+        btn_mprec = InlineKeyboardButton('Мероприятия', callback_data='mp_rec')
+        btn_filmsrec = InlineKeyboardButton('Фильмы', callback_data='films_rec')
+        inline_btn_rec.row(btn_mprec, btn_filmsrec)
         inline_btn_rec.row(nazad_btn)
         bot.edit_message_text(
             chat_id=callback.message.chat.id,
             message_id=callback.message.message_id,
-            text='пока тут пусто',
-            reply_markup= inline_btn_rec
+            text='Здесь вы можете найти фильмы и мероприятия по вашим предпочтениям.',
+            reply_markup=inline_btn_rec
         )
+
+    if callback.data == 'films_like':
+        conn = sqlite3.connect("bazaizbr.bz")
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users")
+        like_films = cursor.fetchall()
+        for i in like_films:
+            print(i)
+        print(callback.message.from_user.id)
+        markup_films_like = InlineKeyboardMarkup()
+        #for like_film in like_films:
+       #     nazv_film =
+
+        cursor.close()
+        conn.close()
+
 
     if callback.data == 'nazad':
         try:
             bot.delete_message(callback.message.chat.id, callback.message.id)
         except Exception as e:
             print(e)
-        #if name_position[callback.message.chat.id] == "RASP":
-        main_s(callback.message)
+        # if name_position[callback.message.chat.id] == "RASP":
+        main_s(callback)
 
 
 @bot.message_handler(commands=['help'])
@@ -509,8 +543,10 @@ def main_h(message):
     )
     bot.send_message(message.chat.id, f'Что умеет бот:\n{commands}')
 
+
 @bot.message_handler()
 def any_message(message):
     bot.send_message(message.chat.id, 'Возможно ты ошибся в команде, напиши /help для просмотра доступных команд')
+
 
 bot.polling(none_stop=True)
