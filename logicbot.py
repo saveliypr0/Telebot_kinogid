@@ -2,6 +2,7 @@ import telebot
 import random
 import requests
 from bs4 import BeautifulSoup
+from sqlalchemy import lambda_stmt
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import sqlite3
 import time
@@ -9,7 +10,7 @@ import tmdbsimple as tmdb
 import find_nameF
 import news_parce
 from init_token import BOT_TOKEN, API_TMDB
-
+from find_film_kbb import find_f, photo_film
 
 bot = telebot.TeleBot(f'{BOT_TOKEN}')
 tmdb.API_KEY = f'{API_TMDB}'
@@ -56,7 +57,7 @@ def get_photo(message):
 
 @bot.message_handler(commands=['website'])
 def site(message):
-    bot.send_message(message.chat.id, 'https://2016.kinofest.org/program-2022')
+    bot.send_message(message.chat.id, 'https://2016.kinofest.org')
 
 
 @bot.message_handler(commands=['start'])
@@ -75,15 +76,43 @@ def main_s(message):
     btn4 = InlineKeyboardButton('Новости', callback_data='news_0')
     btn5 = InlineKeyboardButton('Найти фильм', callback_data='find_film')
     btn6 = InlineKeyboardButton('Заполнить форму', callback_data='FIO')
+    btn7 = InlineKeyboardButton('Наши фильмы', callback_data='kbb_films')
     inline_button.row(btn1, btn2)
     inline_button.row(btn3)
     inline_button.row(btn4)
-    inline_button.row(btn5)
+    inline_button.row(btn5,btn7)
     inline_button.row(btn6)
-    bot.send_message(msg.chat.id,
-                     f"Приветствую, {message.from_user.first_name}! 🎬 Добро пожаловать в мир кино! Я ваш гид по миру кинематографа, готовый помочь выбрать фильм на любой вкус. Могу предложить новинки проката, лучшие фильмы разных жанров, рассказать о последних премьерах и даже поделиться интересными фактами о мире кино. Что бы вы хотели узнать?",
-                     reply_markup=inline_button)
+    bot.send_message(msg.chat.id,f"Приветствую, {message.from_user.first_name}! 🎬 Добро пожаловать в мир кино! "
+                                 f"Я ваш гид по миру кинематографа, готовый помочь выбрать фильм на любой вкус."
+                                 f" Могу предложить новинки проката, лучшие фильмы разных жанров, "
+                                 f"рассказать о последних премьерах и даже поделиться интересными фактами о мире кино. "
+                                 f"Что бы вы хотели узнать?",
+                                 reply_markup=inline_button)
     # bot.register_next_step_handler(message, menu)
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('film_'))
+def kbb_film(callback):
+    id_film = int(callback.data.split('_')[1])
+    description = list(filter(None, find_f()[id_film].text.split('\n'))) # 0-название / 1-описание
+    photo = photo_film()
+    img_tag = f'https://2016.kinofest.org/' + photo[id_film].find('img')['src']
+
+    exit_favor = InlineKeyboardMarkup()
+    favor = InlineKeyboardButton('Добавить в избранное', callback_data='add_izbr')
+    menu = InlineKeyboardButton('Меню', callback_data='nazad')
+    exit_favor.row(favor)
+    exit_favor.row(menu)
+
+    bot.delete_message(
+        chat_id=callback.message.chat.id,
+        message_id=callback.message.message_id
+    )
+    bot.send_photo(
+        chat_id=callback.message.chat.id,
+        caption=f'Название: {description[0]}' + f'\nОписание: {description[1]}',
+        photo=img_tag,
+        reply_markup=exit_favor
+    )
 
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('zal_'))
 def look_zal(callback):
@@ -124,7 +153,7 @@ class NewsPage:
             caption=text_news,
             chat_id=callback.message.chat.id,
             reply_markup=news_markup,
-            parse_mode="MarkdownV2"
+            parse_mode="HTML"
         )
 
 
@@ -259,6 +288,20 @@ dataizb = User()
 
 @bot.callback_query_handler(func=lambda callback: True)
 def callback_message(callback):
+    if callback.data == 'kbb_films':
+        all_films_kbb = InlineKeyboardMarkup()
+        films_kbb = find_f()
+        for item in range(len(films_kbb)):
+            btn_film = InlineKeyboardButton(f'{list(filter(None, films_kbb[item].text.split('\n')))[0]}',
+                callback_data=f'film_{item}')
+            all_films_kbb.row(btn_film)
+
+        bot.edit_message_text(
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            text='Эксклюзивные фильмы которые вы найдете только у нас и в сети интернет',
+            reply_markup=all_films_kbb
+        )
 
     if callback.data == 'send_fio':
         markup_exit = InlineKeyboardMarkup()
