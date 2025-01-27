@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import re
 
 
-check_news = requests.get("https://2016.kinofest.org/news")
+conn_news = requests.get("https://2016.kinofest.org/news")
 
 # def escape_markdown(text):
 #     special_chars = r"_*[]()~`>#+-=|{}.!"
@@ -12,8 +12,8 @@ check_news = requests.get("https://2016.kinofest.org/news")
 #     return text
 
 def show_news(page):
-    if check_news.status_code == 200:
-        html = check_news.text
+    if conn_news.status_code == 200:
+        html = conn_news.text
         soup = BeautifulSoup(html, 'lxml')
         all_news = soup.find_all(class_="nspArt nspCol4")
 

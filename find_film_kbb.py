@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-
+import re
 
 site = requests.get('https://2016.kinofest.org/movie-theater')
 
@@ -9,9 +9,7 @@ if site.status_code == 200:
     soup = BeautifulSoup(html, 'lxml')
 
 def find_f():
-    all_films = soup.find_all(class_="inner-mix bottom-mix")
-    return all_films
-
-def photo_film():
-    photo = soup.find_all(class_="upper-mix")
-    return photo
+    direc_films = soup.find_all(class_=re.compile(r'^mix cat-Онлайн-кинотеатр'))
+    titles = [title.get('data-title') for title in direc_films]
+    links = ['https://2016.kinofest.org/movie-theater' + link.find('a', class_='mix-title')['href'] for link in direc_films]
+    return titles, links
