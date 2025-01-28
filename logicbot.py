@@ -11,6 +11,8 @@ import news_parce
 from init_token import BOT_TOKEN, API_TMDB
 from find_film_kbb import find_f
 from description_film_kbb import parce_desc
+from engine import session
+from models import User
 
 bot = telebot.TeleBot(f'{BOT_TOKEN}')
 tmdb.API_KEY = f'{API_TMDB}'
@@ -271,7 +273,7 @@ class User:
             'text_f': text_f,
             'markup_izbr': markup_izbr,
             'markup_izbr_del': markup_izbr_del,
-            'movie_info': movie
+            'm_id' : movie_id
         }
 
 
@@ -339,44 +341,41 @@ def callback_message(callback):
         bot.send_message(callback.message.chat.id, 'Введите ваше имя')
         bot.register_next_step_handler(callback.message, input_name)
 
-    if callback.message.chat.id in dataizb.user_data:
+    if callback.data == 'add_izbr':
         film_data = dataizb.user_data[callback.message.chat.id]
-        if callback.data == 'add_izbr':
+        new_favor = User(id_usera=callback.message.chat.id, favor=film_data['m_id'])
+        session.add(new_favor)
+        session.commit()
 
-            conn = sqlite3.connect('bazaizbr.bz')
-            cursor = conn.cursor()
+        bot.edit_message_caption(
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            caption=film_data['text_f'],
+            reply_markup=film_data['markup_izbr_del'],
+            parse_mode='MarkdownV2'
+        )
+        users = session.query(User).all()
 
-            cursor.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER, nazv_izbr_f, data_izbr_film)''')
-            cursor.execute('''INSERT INTO users (id, nazv_izbr_f, data_izbr_film) VALUES (?, ?, ?)''',(callback.message.from_user.id, film_data['movie_info']['title'], film_data['text_f']))
-            conn.commit()
-            cursor.close()
-            conn.close()
+        for user in users:
+            print(user.name, user.age)
 
-            bot.edit_message_caption(
-                chat_id=callback.message.chat.id,
-                message_id=callback.message.message_id,
-                caption=film_data['text_f'],
-                reply_markup=film_data['markup_izbr_del'],
-                parse_mode='MarkdownV2'
-            )
-        elif callback.data == 'del_izbr':
-            conn = sqlite3.connect('bazaizbr.bz')
-            cursor = conn.cursor()
+    if callback.data == 'del_izbr':
+        film_data = dataizb.user_data
+        user = session.query(User).filter_by(favor=film_data['m_id']).first()
+        session.delete(user)
+        session.commit()
 
-            cursor.execute('''DELETE FROM users WHERE nazv_izbr_f = ?''', (film_data['text_f'],))
-            conn.commit()
-            cursor.close()
-            conn.close()
+        bot.edit_message_caption(
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            caption=film_data['text_f'],
+            reply_markup=film_data['markup_izbr'],
+            parse_mode='MarkdownV2'
+        )
+        users = session.query(User).all()
 
-            bot.edit_message_caption(
-                chat_id=callback.message.chat.id,
-                message_id=callback.message.message_id,
-                caption=film_data['text_f'],
-                reply_markup=film_data['markup_izbr'],
-                parse_mode='MarkdownV2'
-            )
-    # else:
-    #   bot.send_message(callback.message.chat.id, "Ошибка: данные фильма не найдены.")
+        for user in users:
+            print(user.name, user.age)
 
     if callback.data == 'genre':
         markup_genre = InlineKeyboardMarkup(row_width=1)
