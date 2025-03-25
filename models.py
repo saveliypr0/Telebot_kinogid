@@ -4,16 +4,13 @@ from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
-class User(Base):
+class User_favor(Base):
     __tablename__ = 'favorite_films'
 
     id = Column(Integer, primary_key=True)
-    id_usera = Column(Integer, nullable=False)
-    favor = Column(String(50), nullable=False)
+    id_user = Column(Integer)
+    favor = Column(String(50))
 
-    def __init__(self, id_usera, favor):
-        self.id_usera = id_usera
-        self.favor = favor
 
     def __repr__(self):
-        return f"<User(id_usera='{self.id_usera}', favor='{self.favor}')>"
+        return f"<User(id_usera='{self.id_user}', favor='{self.favor}')>"

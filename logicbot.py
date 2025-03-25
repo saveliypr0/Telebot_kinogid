@@ -12,7 +12,8 @@ from init_token import BOT_TOKEN, API_TMDB
 from find_film_kbb import find_f
 from description_film_kbb import parce_desc
 from engine import session
-from models import User
+from models import User_favor
+
 
 bot = telebot.TeleBot(f'{BOT_TOKEN}')
 tmdb.API_KEY = f'{API_TMDB}'
@@ -47,6 +48,7 @@ AllGenre = {
     'Вестерн': 37
 }
 
+
 @bot.message_handler(content_types=['photo'])
 def get_photo(message):
     bot.reply_to(message, f'{random.randint(0, 10)}/10')
@@ -71,7 +73,7 @@ def main_s(message):
     btn4 = InlineKeyboardButton('Новости', callback_data='news_0')
     btn5 = InlineKeyboardButton('Найти фильм', callback_data='find_film')
     btn6 = InlineKeyboardButton('Заполнить форму', callback_data='FIO')
-    btn7 = InlineKeyboardButton('Наши фильмы', callback_data='kbb_films_0')
+    btn7 = InlineKeyboardButton('Кинофестиваль', callback_data='kbb_films_0')
     inline_button.row(btn1, btn2)
     inline_button.row(btn3)
     inline_button.row(btn4)
@@ -84,6 +86,14 @@ def main_s(message):
                                  f"Что бы вы хотели узнать?",
                                  reply_markup=inline_button)
 
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('add_izbrKB_'))
+def izbr_film(callback):
+    film_id = int(callback.data.split('_')[2])
+    new_favor = User_favor(id_user=callback.message.chat.id, favor=film_id)
+    session.add(new_favor)
+    session.commit()
+    bot.send_message(callback.message.chat.id, "Успешно!")
+
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('film_'))
 def kbb_film(callback):
     film_id = int(callback.data.split('_')[1])
@@ -91,7 +101,7 @@ def kbb_film(callback):
     text, img = parce_desc(links_kbb[film_id])
 
     exit_favor = InlineKeyboardMarkup()
-    favor = InlineKeyboardButton('Добавить в избранное', callback_data='add_izbr')
+    favor = InlineKeyboardButton('Добавить в избранное(пока не меняется)', callback_data=f'add_izbrKB_{film_id}')
     exit_favor.row(favor)
     exit_favor.row(globus.nazad_btn)
 
@@ -103,7 +113,8 @@ def kbb_film(callback):
         chat_id=callback.message.chat.id,
         caption=text,
         photo=img,
-        reply_markup=exit_favor
+        reply_markup=exit_favor,
+        parse_mode='MarkdownV2'
     )
 
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('zal_'))
@@ -164,9 +175,9 @@ class DataZal:
         check_site_programs = requests.get('https://2016.kinofest.org/program-2022')
         n_data = int(callback.data.split('_')[1])
         inline_btn_data = InlineKeyboardMarkup()
-        btnz1 = InlineKeyboardButton('Зал 1', callback_data='zal_1')
-        btnz2 = InlineKeyboardButton('Зал 2', callback_data='zal_2')
-        btnz3 = InlineKeyboardButton('Зал 3', callback_data='zal_3')
+        btnz1 = InlineKeyboardButton('Зал 1', callback_data='zal_0')
+        btnz2 = InlineKeyboardButton('Зал 2', callback_data='zal_1')
+        btnz3 = InlineKeyboardButton('Зал 3', callback_data='zal_2')
 
         inline_btn_data.row(btnz1, btnz2, btnz3)
         inline_btn_data.row(globus.nazad_btn)
@@ -221,31 +232,44 @@ def show_genre_film(call):
         prev_btn = InlineKeyboardButton('<<<', callback_data=prev_page_callback)
         sp_btn.insert(0, prev_btn)
 
-    reserv_AllGenre = {value: key for key, value in AllGenre.items()}
+    reserv_all_genre = {value: key for key, value in AllGenre.items()}
 
     markup_res_genre.row(*sp_btn)
     markup_res_genre.row(globus.nazad_btn)
     bot.edit_message_text(
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
-        text=f'Фильмы жанра {reserv_AllGenre[genre_id]} (страница {page}):',
+        text=f'Фильмы жанра {reserv_all_genre[genre_id]} (страница {page}):',
         reply_markup=markup_res_genre
     )
 
 
 class User:
     user_data = {}
-
+    text_f = None
     def __init__(self):
         self.message = None
         self.data = None
 
+    def escape_markdown_v2(text):
+        special_characters = r'_*[]()~`>#+-=|{}.!'
+        return ''.join(f'\\{char}' if char in special_characters else char for char in text)
+
+    @staticmethod
+    def get_info(movie):
+        genres = ', '.join([genre['name'] for genre in movie['genres']]) or 'Нет жанра'
+        overview = movie.get('overview') or 'Описание отсутствует.'
+        release_date = movie.get('release_date') or 'Дата выхода неизвестна.'
+
+        User.text_f = f"""*Название:* {User.escape_markdown_v2(movie['title'])}
+*Жанры:* {User.escape_markdown_v2(genres)}
+*Дата выхода:* {User.escape_markdown_v2(release_date)}
+*Рейтинг:* {User.escape_markdown_v2(str(movie['vote_average']))} / 10
+*Описание:*
+    {User.escape_markdown_v2(overview)}"""
+
     @bot.callback_query_handler(func=lambda call: call.data.startswith('movie_'))
     def show_film(call):
-        def escape_markdown_v2(text):
-            special_characters = r'_*[]()~`>#+-=|{}.!'
-            return ''.join(f'\\{char}' if char in special_characters else char for char in text)
-
         movie_id = int(call.data.split('_')[1])
         movie = tmdb.Movies(movie_id).info(language="ru")
         poster_path = movie.get('poster_path')
@@ -254,38 +278,50 @@ class User:
         else:
             poster_url = None
 
-        genres = ', '.join([genre['name'] for genre in movie['genres']]) or 'Нет жанра'
-        overview = movie.get('overview') or 'Описание отсутствует.'
-        release_date = movie.get('release_date') or 'Дата выхода неизвестна.'
-
-        text_f = f"""*Название:* {escape_markdown_v2(movie['title'])}
-    *Жанры:* {escape_markdown_v2(genres)}
-    *Дата выхода:* {escape_markdown_v2(release_date)}
-    *Рейтинг:* {escape_markdown_v2(str(movie['vote_average']))} / 10
-    *Описание:*
-        {escape_markdown_v2(overview)}"""
-
         markup_izbr = InlineKeyboardMarkup()
         markup_izbr_del = InlineKeyboardMarkup()
         markup_izbr.add(InlineKeyboardButton('Добавить в избранное', callback_data='add_izbr'))
         markup_izbr_del.add(InlineKeyboardButton('Удалить из избранного', callback_data='del_izbr'))
         User.user_data[call.message.chat.id] = {
-            'text_f': text_f,
             'markup_izbr': markup_izbr,
             'markup_izbr_del': markup_izbr_del,
             'm_id' : movie_id
         }
 
+        User.get_info(movie)
 
         markup_izbr.row(globus.nazad_btn)
         markup_izbr_del.row(globus.nazad_btn)
 
-        if poster_url:
-            bot.send_photo(call.message.chat.id, photo=poster_url, caption=text_f, parse_mode='MarkdownV2',
-                           reply_markup=markup_izbr)
+        user = session.query(User_favor).filter_by(id_user=call.message.chat.id).filter(User_favor.favor == movie_id).first()
+        if user is not None:
+            bot.delete_message(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id
+            )
+            if poster_url:
+                bot.send_photo(call.message.chat.id,
+                               photo=poster_url,
+                               caption=User.text_f,
+                               parse_mode='MarkdownV2',
+                               reply_markup=markup_izbr_del)
+            else:
+                bot.send_message(call.message.chat.id,
+                                 text=User.text_f,
+                                 parse_mode='MarkdownV2',
+                                 reply_markup=markup_izbr_del)
         else:
-            bot.send_message(call.message.chat.id, text=text_f, parse_mode='MarkdownV2', reply_markup=markup_izbr)
-
+            if poster_url:
+                bot.send_photo(call.message.chat.id,
+                               photo=poster_url,
+                               caption=User.text_f,
+                               parse_mode='MarkdownV2',
+                               reply_markup=markup_izbr)
+            else:
+                bot.send_message(call.message.chat.id,
+                                 text=User.text_f,
+                                 parse_mode='MarkdownV2',
+                                 reply_markup=markup_izbr)
 
 dataizb = User()
 #бешенством заражаются, как правило, от укуса собаки, так что будьте аккуратны и не кусайте кого попало
@@ -311,7 +347,7 @@ def callback_message(callback):
         bot.edit_message_text(
             chat_id=callback.message.chat.id,
             message_id=callback.message.message_id,
-            text='Эксклюзивные фильмы которые вы найдете только у нас и в сети интернет',
+            text='Эксклюзивные фильмы которые вы найдете только у нас',
             reply_markup=all_films_kbb
         )
 
@@ -341,41 +377,35 @@ def callback_message(callback):
         bot.send_message(callback.message.chat.id, 'Введите ваше имя')
         bot.register_next_step_handler(callback.message, input_name)
 
+
     if callback.data == 'add_izbr':
         film_data = dataizb.user_data[callback.message.chat.id]
-        new_favor = User(id_usera=callback.message.chat.id, favor=film_data['m_id'])
+        new_favor = User_favor(id_user=callback.message.chat.id, favor=film_data['m_id'])
         session.add(new_favor)
         session.commit()
 
         bot.edit_message_caption(
             chat_id=callback.message.chat.id,
             message_id=callback.message.message_id,
-            caption=film_data['text_f'],
+            caption=User.text_f,
             reply_markup=film_data['markup_izbr_del'],
             parse_mode='MarkdownV2'
         )
-        users = session.query(User).all()
-
-        for user in users:
-            print(user.name, user.age)
 
     if callback.data == 'del_izbr':
-        film_data = dataizb.user_data
-        user = session.query(User).filter_by(favor=film_data['m_id']).first()
+        film_data = dataizb.user_data[callback.message.chat.id]
+        user = session.query(User_favor).filter_by(favor=film_data['m_id']).first()
         session.delete(user)
         session.commit()
 
         bot.edit_message_caption(
             chat_id=callback.message.chat.id,
             message_id=callback.message.message_id,
-            caption=film_data['text_f'],
+            caption=User.text_f,
             reply_markup=film_data['markup_izbr'],
             parse_mode='MarkdownV2'
         )
-        users = session.query(User).all()
 
-        for user in users:
-            print(user.name, user.age)
 
     if callback.data == 'genre':
         markup_genre = InlineKeyboardMarkup(row_width=1)
@@ -525,8 +555,6 @@ def callback_message(callback):
         bot.send_message(callback.message.chat.id, f'Все пользователи:\n\n{info_au}')
 
 
-    check_site_news = requests.get('https://2016.kinofest.org/news')
-
     if callback.data == 'look_rasp':
         check_site_programs = requests.get('https://2016.kinofest.org/program-2022')
         if check_site_programs.status_code == 200:
@@ -558,14 +586,14 @@ def callback_message(callback):
             text="Ближайшие мероприятия",
             reply_markup=inline_btn_rasp
         )
-
+#*приходит на свадьбу, жмет руку невесте*
+#-я пришел к вам с пустыми руками, но не с пустыми яйцами
     '''if callback.data == 'sled':
         e += 3
         callback_data='look_rasp'
         callback_message(callback)'''
 
     if callback.data == 'look_lk':
-        # name_position[callback.message.chat.id] = "LK"
         inline_btn_l_k = InlineKeyboardMarkup()
 
         btn_izbr = InlineKeyboardButton('Избранное', callback_data='like_films_mp')
@@ -583,7 +611,6 @@ def callback_message(callback):
         )
 
     if callback.data == 'like_films_mp':
-        # name_position[callback.message.chat.id] = "lIKE"
         inline_btn_like = InlineKeyboardMarkup()
 
         btn_mplike = InlineKeyboardButton('Мероприятия', callback_data='mp_like')
@@ -598,7 +625,6 @@ def callback_message(callback):
         )
 
     if callback.data == 'rec':
-        # name_position[callback.message.chat.id] = "REC"
         inline_btn_rec = InlineKeyboardMarkup()
 
         btn_mprec = InlineKeyboardButton('Мероприятия', callback_data='mp_rec')
@@ -613,27 +639,30 @@ def callback_message(callback):
         )
 
     if callback.data == 'films_like':
-        conn = sqlite3.connect("bazaizbr.bz")
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users")
-        like_films = cursor.fetchall()
-        for i in like_films:
-            print(i)
-        print(callback.message.from_user.id)
-        markup_films_like = InlineKeyboardMarkup()
-        #for like_film in like_films:
-       #     nazv_film =
+        user = session.query(User_favor).filter_by(id_user=callback.message.chat.id).all()
+        makrup_favor = InlineKeyboardMarkup()
+        for info_user in user:
+            movie_id = info_user.favor
+            try:
+                movie = tmdb.Movies(movie_id).info(language="ru")
+                film_btn = InlineKeyboardButton(movie['title'], callback_data=f'movie_{movie_id}')
+            except:
+                film_btn = InlineKeyboardButton(find_f()[0][int(movie_id)], callback_data=f'film_{movie_id}')
 
-        cursor.close()
-        conn.close()
-
+            makrup_favor.row(film_btn)
+        makrup_favor.row(Globus.nazad_btn)
+        bot.edit_message_text(
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            text='Ваши любимые фильмы',
+            reply_markup=makrup_favor
+        )
 
     if callback.data == 'nazad':
         try:
             bot.delete_message(callback.message.chat.id, callback.message.id)
         except Exception as e:
             print(e)
-        # if name_position[callback.message.chat.id] == "RASP":
         main_s(callback)
 
 @bot.message_handler(commands=['help'])

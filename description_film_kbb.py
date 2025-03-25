@@ -1,6 +1,11 @@
 import requests
 from bs4 import BeautifulSoup
 
+
+def escape_markdown_v2(text):
+    special_characters = r'_*[]()~`>#+-=|{}.!'
+    return ''.join(f'\\{char}' if char in special_characters else char for char in text)
+
 def parce_desc(link):
     conn_desc = requests.get(link)
     if conn_desc.status_code == 200:
@@ -18,6 +23,7 @@ def parce_desc(link):
             else:
                 formatted_lines.append(f"{lines[i].strip()} {lines[i + 1].strip()}")
 
-        info = '\n'.join(formatted_lines)
+        info = escape_markdown_v2('\n'.join(formatted_lines))
+        info_format = f"""*{info.replace(': ', ':* ').replace('\n', '\n*')}*"""
 
-        return info + f'\n{desc}', img
+        return info_format + f'\n{escape_markdown_v2(desc)}', img
