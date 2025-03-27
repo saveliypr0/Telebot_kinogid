@@ -13,5 +13,3 @@
   >2) парсятся с сайта https://2016.kinofest.org 
 
   сам бот - @KinoWBarriarPYbot
-
-Поиск фильмов ( на TMDB ) работает только с впн
